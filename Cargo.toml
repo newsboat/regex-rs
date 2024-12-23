@@ -1,0 +1,21 @@
+[package]
+name = "regex-rs"
+version = "0.1.0"
+authors = ["Alexander Batischev <eual.jp@gmail.com>"]
+edition = "2021"
+license = "MIT"
+# ==============
+readme = "README.md"
+description = """ Safe wrapper for [POSIX regular expressions API][regex-h] (provided by libc on POSIX-compliant OSes).
+Part of libnewsboat lib dependencies"""
+homepage = "https://github.com/newsboat/newsboat"
+repository = "https://github.com/newsboat/newsboat"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+strprintf = "0.1.0"
+
+bitflags = "2.6"
+libc = ">=0.2.69"
+gettext-rs = "0.7.2"
