@@ -8,8 +8,8 @@ license = "MIT"
 readme = "README.md"
 description = """ Safe wrapper for [POSIX regular expressions API][regex-h] (provided by libc on POSIX-compliant OSes).
 Part of libnewsboat lib dependencies"""
-homepage = "https://github.com/newsboat/newsboat"
-repository = "https://github.com/exaroth/regex-rs-crates.io"
+homepage = "https://github.com/newsboat/regex-rs"
+repository = "https://github.com/newsboat/regex-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
