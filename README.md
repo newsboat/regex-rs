@@ -29,3 +29,8 @@ assert_eq!(matches[0].start_pos, 0);
 // `end_pos` holds one-past-the-end index
 assert_eq!(matches[0].end_pos, input.len());
 ```
+
+## License
+
+regex-rs is licensed under [the MIT
+license](https://opensource.org/licenses/MIT); see the LICENSE file.
