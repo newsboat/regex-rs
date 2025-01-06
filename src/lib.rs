@@ -2,6 +2,8 @@
 //!
 //! [regex-h]: https://pubs.opengroup.org/onlinepubs/9699919799.2008edition/basedefs/regex.h.html#tag_13_37
 //!
+//! Example usage:
+//!
 //! ```
 //! use regex_rs::*;
 //!
