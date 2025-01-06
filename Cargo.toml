@@ -8,6 +8,8 @@ readme = "README.md"
 description = "Safe wrapper for POSIX regular expressions API"
 homepage = "https://github.com/newsboat/regex-rs"
 repository = "https://github.com/newsboat/regex-rs"
+keywords = ["posix", "regex", "bindings"]
+categories = ["api-bindings", "os"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
