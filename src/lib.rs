@@ -418,11 +418,15 @@ mod tests {
     fn new_returns_error_on_invalid_regex() {
         let result = Regex::new("(abc", CompFlags::EXTENDED);
 
-        assert!(result.is_err());
-        if let Err(CompError::RegcompError { code, message }) = result {
-            assert_eq!(code, ErrCode::EPAREN as i32);
-            // There should be a message when there is an error.
-            assert!(!message.is_empty());
+        match result {
+            Err(CompError::RegcompError { code, message }) => {
+                assert_eq!(code, ErrCode::EPAREN as i32);
+                // There should be a message when there is an error.
+                assert!(!message.is_empty());
+            }
+
+            Ok(_) => panic!("Regex::new() returned Ok(), expected Err()"),
+            Err(e) => panic!("Regex::new() returned an unexpected value: Err({:?})", e),
         }
     }
 }
