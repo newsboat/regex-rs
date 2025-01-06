@@ -34,13 +34,11 @@
 #![allow(clippy::unreadable_literal)]
 
 use bitflags::bitflags;
-use gettextrs::gettext;
 use libc::{regcomp, regerror, regex_t, regexec, regfree, regmatch_t};
 use std::ffi::{CString, OsString};
 use std::mem;
 use std::os::unix::ffi::OsStringExt;
 use std::ptr;
-use strprintf::fmt;
 
 /// POSIX regular expression.
 pub struct Regex {
@@ -114,7 +112,7 @@ pub struct Match {
 }
 
 /// A wrapper around `libc::regerror()`.
-unsafe fn regex_error_to_str(errcode: libc::c_int, regex: &regex_t) -> Option<String> {
+unsafe fn regex_error_to_str(errcode: libc::c_int, regex: &regex_t) -> OsString {
     // Find out the size of the buffer needed to hold the error message
     let errmsg_length = regerror(errcode, regex, ptr::null_mut(), 0);
 
@@ -132,7 +130,106 @@ unsafe fn regex_error_to_str(errcode: libc::c_int, regex: &regex_t) -> Option<St
     // Drop the trailing NUL byte that C uses to terminate strings
     errmsg.pop();
 
-    OsString::from_vec(errmsg).into_string().ok()
+    OsString::from_vec(errmsg)
+}
+
+/// Some error codes that the underlying API can return.
+///
+/// These are the ones defined by POSIX. Implementations might return additional ones.
+#[repr(i32)]
+pub enum ErrCode {
+    /// Content of "\{\}" invalid: not a number, number too large, more than two numbers, first larger than second.
+    ///
+    /// POSIX calls this `REG_BADBR`.
+    BADBR = libc::REG_BADBR,
+
+    /// Invalid regular expression.
+    ///
+    /// POSIX calls this `REG_BADPAT`.
+    BADPAT = libc::REG_BADPAT,
+
+    /// '?' , '*' , or '+' not preceded by valid regular expression.
+    ///
+    /// POSIX calls this `REG_BADRPT`.
+    BADRPT = libc::REG_BADRPT,
+
+    /// "\{\}" imbalance.
+    ///
+    /// POSIX calls this `REG_EBRACE`.
+    EBRACE = libc::REG_EBRACE,
+
+    /// "[]" imbalance.
+    ///
+    /// POSIX calls this `REG_EBRACK`.
+    EBRACK = libc::REG_EBRACK,
+
+    /// Invalid collating element referenced.
+    ///
+    /// POSIX calls this `REG_ECOLLATE`.
+    ECOLLATE = libc::REG_ECOLLATE,
+
+    /// Invalid character class type referenced.
+    ///
+    /// POSIX calls this `REG_ECTYPE`.
+    ECTYPE = libc::REG_ECTYPE,
+
+    /// Trailing backslash (`\\`) character in pattern.
+    ///
+    /// POSIX calls this `REG_EESCAPE`.
+    EESCAPE = libc::REG_EESCAPE,
+
+    /// "\(\)" or "()" imbalance.
+    ///
+    /// POSIX calls this `REG_EPAREN`.
+    EPAREN = libc::REG_EPAREN,
+
+    /// Invalid endpoint in range expression.
+    ///
+    /// POSIX calls this `REG_ERANGE`.
+    ERANGE = libc::REG_ERANGE,
+
+    /// Out of memory.
+    ///
+    /// POSIX calls this `REG_ESPACE`.
+    ESPACE = libc::REG_ESPACE,
+
+    /// Number in "\digit" invalid or in error.
+    ///
+    /// POSIX calls this `REG_ESUBREG`.
+    ESUBREG = libc::REG_ESUBREG,
+
+    /// `regexec()` (`Regex::matches()`) failed to match.
+    ///
+    /// POSIX calls this `REG_NOMATCH`.
+    NOMATCH = libc::REG_NOMATCH,
+}
+
+/// The error type for [`Regex::new()`][].
+#[derive(Debug)]
+pub enum CompError {
+    /// Regular expression contains a NUL character (`\0`). These are forbidden because C API uses
+    /// NUL to indicate the end in strings.
+    InputContainsNul,
+
+    /// An error from the underlying API.
+    ///
+    /// The `code` can be compared to one of the [`ErrCode`][] constants. The `message` might have more
+    /// information about the problem.
+    RegcompError { code: i32, message: OsString },
+}
+
+/// The error type for [`Regex::matches()`][].
+#[derive(Debug)]
+pub enum MatchError {
+    /// Regular expression contains a NUL character (`\0`). These are forbidden because C API uses
+    /// NUL to indicate the end in strings.
+    InputContainsNul,
+
+    /// An error from the underlying API.
+    ///
+    /// The `code` can be compared to one of the [`ErrCode`][] constants. The `message` might have more
+    /// information about the problem.
+    RegexecError { code: i32, message: OsString },
 }
 
 impl Regex {
@@ -140,14 +237,13 @@ impl Regex {
     ///
     /// By default, pattern is assumed to be a basic regular expression. To interpret it as an
     /// extended regular expression, add `CompFlags::EXTENDED` to the `flags`. See also other
-    /// `CompFlags` values to control some other aspects of the regex.
+    /// [`CompFlags`][] values to control some other aspects of the regex.
     ///
     /// # Returns
     ///
     /// Compiled regex or an error message.
-    pub fn new(pattern: &str, flags: CompFlags) -> Result<Regex, String> {
-        let pattern = CString::new(pattern)
-            .map_err(|_| String::from("Regular expression contains NUL byte"))?;
+    pub fn new(pattern: &str, flags: CompFlags) -> Result<Regex, CompError> {
+        let pattern = CString::new(pattern).or(Err(CompError::InputContainsNul))?;
 
         unsafe {
             let mut regex: regex_t = mem::zeroed();
@@ -156,15 +252,10 @@ impl Regex {
             if errcode == 0 {
                 Ok(Regex { regex })
             } else {
-                match regex_error_to_str(errcode, &regex) {
-                    Some(regcomp_errmsg) => {
-                        let msg = fmt!(&gettext("regcomp returned code %i"), errcode);
-                        let msg = format!("{msg}: {regcomp_errmsg}");
-                        Err(msg)
-                    }
-
-                    None => Err(fmt!(&gettext("regcomp returned code %i"), errcode)),
-                }
+                Err(CompError::RegcompError {
+                    code: errcode,
+                    message: regex_error_to_str(errcode, &regex),
+                })
             }
         }
     }
@@ -175,7 +266,7 @@ impl Regex {
     /// `max_matches`-1 of those. First match is reserved for the text that the whole regex
     /// matched.
     ///
-    /// `flags` dictate how matching is performed. See `MatchFlags` for details.
+    /// `flags` dictate how matching is performed. See [`MatchFlags`][] for details.
     ///
     /// # Returns
     ///
@@ -190,9 +281,8 @@ impl Regex {
         input: &str,
         max_matches: usize,
         flags: MatchFlags,
-    ) -> Result<Vec<Match>, String> {
-        let input =
-            CString::new(input).map_err(|_| String::from("Input string contains NUL byte"))?;
+    ) -> Result<Vec<Match>, MatchError> {
+        let input = CString::new(input).or(Err(MatchError::InputContainsNul))?;
 
         let mut pmatch: Vec<regmatch_t>;
 
@@ -241,14 +331,10 @@ impl Regex {
             // POSIX only specifies two return codes for regexec(), but implementations are free to
             // extend that.
             _ => unsafe {
-                match regex_error_to_str(errcode, &self.regex) {
-                    Some(regexec_errmsg) => {
-                        let msg = fmt!(&gettext("regexec returned code %i"), errcode);
-                        let msg = format!("{msg}: {regexec_errmsg}");
-                        Err(msg)
-                    }
-                    None => Err(fmt!(&gettext("regexec returned code %i"), errcode)),
-                }
+                Err(MatchError::RegexecError {
+                    code: errcode,
+                    message: regex_error_to_str(errcode, &self.regex),
+                })
             },
         }
     }
@@ -334,13 +420,15 @@ mod tests {
     fn new_returns_error_on_invalid_regex() {
         let result = Regex::new("(abc", CompFlags::EXTENDED);
 
-        assert!(result.is_err());
-        if let Err(msg) = result {
-            // There should be at least an error code, so string can't possibly be empty
-            assert!(!msg.is_empty());
+        match result {
+            Err(CompError::RegcompError { code, message }) => {
+                assert_eq!(code, ErrCode::EPAREN as i32);
+                // There should be a message when there is an error.
+                assert!(!message.is_empty());
+            }
 
-            // The message shouldn't contain a C string terminator (NUL) at the end
-            assert!(!msg.ends_with('\0'));
+            Ok(_) => panic!("Regex::new() returned Ok(), expected Err()"),
+            Err(e) => panic!("Regex::new() returned an unexpected value: Err({:?})", e),
         }
     }
 }
